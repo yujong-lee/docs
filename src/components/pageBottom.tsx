@@ -34,7 +34,7 @@ const Feedback = styled.div`
 const PageBottom = ({ editDocsPath }: any) => (
   <PageBottomWrapper>
     <Feedback>
-      {/* <h4>Was this helpful?</h4>
+      <h4>Was this helpful?</h4>
       <div className="moods">
         <a href={'/'}>
           <Down />
@@ -42,7 +42,7 @@ const PageBottom = ({ editDocsPath }: any) => (
         <a href={'/'}>
           <Up />
         </a>
-      </div> */}
+      </div>
     </Feedback>
     {editDocsPath && <Link to={`${editDocsPath}`}>Edit this page on Github</Link>}
   </PageBottomWrapper>

@@ -192,6 +192,47 @@ With the `provider` field set, you can go ahead and configure the connection URL
 
 Assume the database configuration in your Docker Compose file that you used to deploy your Prisma server looks as follows:
 
+<SwitchTech technologies={['*', 'postgresql']}>
+
+```yml file=docker-compose.yml
+PRISMA_CONFIG: |
+  port: 4466
+  databases:
+    default:
+      connector: postgres
+      host: postgres
+      port: 5432
+      user: prisma
+      password: prisma
+```
+
+Also assume your `endpoint` in `prisma.yml` is configured as follows:
+
+```yml file=prisma.yml
+endpoint: http://localhost:4466/myproject/dev
+```
+
+Based on these connection details, you need to configure the `DATABASE_URL` environment variable inside your `.env` file as follows:
+
+```js file=.env
+DATABASE_URL="postgresql://janedoe:randompassword@localhost:5432/prisma?schema=myproject$dev"
+```
+
+Note that the `schema` argument is typically composed of your _service name_ and _service stage_ (which are part of the `endpoint` in `prisma.yml`), separated by the `$` character. 
+
+Sometimes no service name and stage are specified in `prisma.yml`:
+
+```yml file=prisma.yml
+endpoint: http://localhost:4466/
+```
+
+In that case, the `schema` must be specified as follows:
+
+```js file=.env
+DATABASE_URL="postgresql://janedoe:randompassword@localhost:5432/prisma?schema=default$default"
+```
+
+</SwitchTech>
 
 <SwitchTech technologies={['*', 'mysql']}>
 
@@ -505,11 +546,11 @@ As a next step, you can start sending the SQL statements to your database. Note 
 
 The next sections cover the different kinds of SQL statements to be sent to your database individually.
 
-<h3>5.1. Fix the database schema via plain SQL (non-breaking)</h3>
+**5.1. Fix the database schema via plain SQL (non-breaking)**
 
 In this section, we'll walk through the printed SQL statements and run them against the database one by one. 
 
-<h3>5.1.1. Fix columns with ENUM data types</h3>
+**5.1.1. Fix columns with ENUM data types**
 
 The first thing the tool does is help you ensure that `enum` definitions in your Prisma 1 datamodel will be represented as actual `ENUM` types in the underlying database, right now they are represented as plain strings (e.g. as `MEDIUMTEXT` in MySQL).
 
@@ -526,7 +567,7 @@ Go ahead and run these statements against your database now.
 
 ![](https://imgur.com/Fo0LbzU.png)
 
-<h3>5.1.2. Add missing `DEFAULT` constraints to the database</h3>
+**5.1.2. Add missing `DEFAULT` constraints to the database**
 
 Next, the Upgrade CLI helps you resolve the issue that [default values aren't represented in the database](./schema-incompatibilities#default-values-arent-represented-in-database) by generating SQL statements that add the respective `DEFAULT` constraints directly to the database.
 
@@ -544,7 +585,7 @@ You can now run these SQL statements against your database either using a comman
 
 ![](https://imgur.com/Qr7L1Nc.png)
 
-<h3>5.1.3. Fix columns with JSON data types</h3>
+**5.1.3. Fix columns with JSON data types**
 
 Next, the tool helps you ensure that `Json` fields in your Prisma 1 datamodel will be represented as `JSON` columns in the underlying database, right now they are represented as plain strings (e.g. as `MEDIUMTEXT` in MySQL).
 
@@ -563,7 +604,7 @@ You can now run these SQL statements against your database either using a comman
 
 ![](https://imgur.com/feI3ZUF.png)
 
-<h3>5.1.4. Replicate `@createdAt` behavior in Prisma 2</h3>
+**5.1.4. Replicate `@createdAt` behavior in Prisma 2**
 
 The next thing the tools does is help you resolve the issue that the behaviour of [`@createdAt` isn't represented in database](./schema-incompatibilities#default-values-arent-represented-in-database)
 
@@ -578,7 +619,7 @@ https://pris.ly/d/schema-incompatibilities#createdat-isnt-represented-in-databas
 
 You can now run these SQL statements against your database either using a command line client or a GUI like TablePlus.
 
-<h3>5.1.5. Fix 1-1 relations by adding `UNIQUE` constraints</h3>
+**5.1.5. Fix 1-1 relations by adding `UNIQUE` constraints**
 
 Now, the tool will help you [turn the current 1-n relation between `User` ↔ `Profile`  back into a 1-1 relation](./schema-incompatibilities#inline-1-1-relations-are-recognized-as-1-n-missing-unique-constraint) by adding a `UNIQUE` constraint to the foreign key column called `user` (named after the relation field in the Prisma 1 datamodel) in the database.
 
@@ -593,7 +634,7 @@ https://pris.ly/d/schema-incompatibilities#inline-1-1-relations-are-recognized-a
 
 You can now run these SQL statements against your database either using a command line client or a GUI like TablePlus.
 
-<h3>5.1.6. Fix mismatch of CUID length</h3>
+**5.1.6. Fix mismatch of CUID length**
 
 > **Note**: These SQL statements will keep appearing in the Upgrade CLI even after you have changed the column types in the underlying database. This is a currently a limitation in the Upgrade CLI.
 
@@ -616,7 +657,7 @@ SET FOREIGN_KEY_CHECKS=1;
 
 You can now run these SQL statements against your database either using a command line client or a GUI like TablePlus.
 
-<h3>5.1.7. Breaking changes detected</h3>
+**5.1.7. Breaking changes detected**
 
 In case the Upgrade CLI has printed a note about breaking changes, your database schema needs some adjustments that will break Prisma 1 compatitibility in order to be fully optimized. 
 
@@ -627,11 +668,11 @@ Depending on your [upgrade strategy](./how-to-upgrade#upgrade-strategies), you c
 - If you are following the gradual side-by-side upgrade strategy, do not perform these changes yet since they will break your Prisma 1 setup. In that case, you can continue to the next phase of the Upgrade CLI by typing <kbd>n</kbd> and hitting <kbd>RETURN</kbd>.
 - If you are following the all at once upgrade strategy, you can perform these changes now. In that case, continue by typing <kbd>Y</kbd> and hitting <kbd>RETURN</kbd>.
 
-<h3>5.2. Fix the database schema via plain SQL (breaking)</h3>
+**5.2. Fix the database schema via plain SQL (breaking)**
 
 In this section, you'll resolve the schema incompatibilities that are breaking your Prisma 1 setup. Do not perform these changes if you are still running Prisma 1 in your project!
 
-<h3>5.2.1. Fix incorrect m-n relations</h3>
+**5.2.1. Fix incorrect m-n relations**
 
 Now, the Upgrade CLI helps you fix all 1-1 and 1-n relations that Prisma 1 represents with relation tables and that [currently only exist as m-n relations](./schema-incompatibilities#all-non-inline-relations-are-recognized-as-m-n) in your new Prisma 2 schema. Concretely, this is the case for the `User` ↔ `Post` relation which currently is defined as m-n but _should_ really be a 1-n relation. 
 
@@ -694,7 +735,7 @@ For this fix, you'll need to run three SQL statements:
 
 After these commands, the user ID values of the records from column `B` of the relation table are migrated to the new `authorId` column.
 
-<h3>5.2. Re-introspect your database to update your Prisma schema</h3>
+**5.2. Re-introspect your database to update your Prisma schema**
 
 At this point, you've resolved the schema incompatibilities with the Upgrade CLI. You can now exit the Upgrade CLI for now by typing <kbd>n</kbd> and hitting <kbd>RETURN</kbd>.
 
@@ -750,7 +791,7 @@ enum Role {
 
 This schema has most issues resolved, but it still lacks the following:
 
-<h3>5.2. Add missing attributes to the Prisma 2 schema and other schema fixes</h3>
+**5.2. Add missing attributes to the Prisma 2 schema and other schema fixes**
 
 The CLI now prints the following:
 
@@ -860,6 +901,8 @@ https://pris.ly/d/upgrade-from-prisma-1
 </SwitchTech>
 
 
+
+
 <SwitchTech technologies={['*', 'mysql']}>
 
 ```no-lines
@@ -935,11 +978,11 @@ As a next step, you can start sending the SQL statements to your database. Note 
 
 The next sections cover the different kinds of SQL statements to be sent to your database individually.
 
-<h3>5.1. Fix the database schema via plain SQL (non-breaking)</h3>
+**5.1. Fix the database schema via plain SQL (non-breaking)**
 
 In this section, we'll walk through the printed SQL statements and run them against the database one by one. 
 
-<h3>5.1.1. Fix columns with ENUM data types</h3>
+**5.1.1. Fix columns with ENUM data types**
 
 The first thing the tool does is help you ensure that `enum` definitions in your Prisma 1 datamodel will be represented as actual `ENUM` types in the underlying database, right now they are represented as plain strings (e.g. as `MEDIUMTEXT` in MySQL).
 
@@ -956,7 +999,7 @@ Go ahead and run these statements against your database now.
 
 ![](https://imgur.com/Fo0LbzU.png)
 
-<h3>5.1.2. Add missing `DEFAULT` constraints to the database</h3>
+**5.1.2. Add missing `DEFAULT` constraints to the database**
 
 Next, the Upgrade CLI helps you resolve the issue that [default values aren't represented in the database](./schema-incompatibilities#default-values-arent-represented-in-database) by generating SQL statements that add the respective `DEFAULT` constraints directly to the database.
 
@@ -974,7 +1017,7 @@ You can now run these SQL statements against your database either using a comman
 
 ![](https://imgur.com/Qr7L1Nc.png)
 
-<h3>5.1.3. Fix columns with JSON data types</h3>
+**5.1.3. Fix columns with JSON data types**
 
 Next, the tool helps you ensure that `Json` fields in your Prisma 1 datamodel will be represented as `JSON` columns in the underlying database, right now they are represented as plain strings (e.g. as `MEDIUMTEXT` in MySQL).
 
@@ -993,7 +1036,7 @@ You can now run these SQL statements against your database either using a comman
 
 ![](https://imgur.com/feI3ZUF.png)
 
-<h3>5.1.4. Replicate `@createdAt` behavior in Prisma 2</h3>
+**5.1.4. Replicate `@createdAt` behavior in Prisma 2**
 
 The next thing the tools does is help you resolve the issue that the behaviour of [`@createdAt` isn't represented in database](./schema-incompatibilities#default-values-arent-represented-in-database)
 
@@ -1008,7 +1051,7 @@ https://pris.ly/d/schema-incompatibilities#createdat-isnt-represented-in-databas
 
 You can now run these SQL statements against your database either using a command line client or a GUI like TablePlus.
 
-<h3>5.1.5. Fix 1-1 relations by adding `UNIQUE` constraints</h3>
+**5.1.5. Fix 1-1 relations by adding `UNIQUE` constraints**
 
 Now, the tool will help you [turn the current 1-n relation between `User` ↔ `Profile`  back into a 1-1 relation](./schema-incompatibilities#inline-1-1-relations-are-recognized-as-1-n-missing-unique-constraint) by adding a `UNIQUE` constraint to the foreign key column called `user` (named after the relation field in the Prisma 1 datamodel) in the database.
 
@@ -1023,7 +1066,7 @@ https://pris.ly/d/schema-incompatibilities#inline-1-1-relations-are-recognized-a
 
 You can now run these SQL statements against your database either using a command line client or a GUI like TablePlus.
 
-<h3>5.1.6. Fix mismatch of CUID length</h3>
+**5.1.6. Fix mismatch of CUID length**
 
 > **Note**: These SQL statements will keep appearing in the Upgrade CLI even after you have changed the column types in the underlying database. This is a currently a limitation in the Upgrade CLI.
 
@@ -1046,7 +1089,7 @@ SET FOREIGN_KEY_CHECKS=1;
 
 You can now run these SQL statements against your database either using a command line client or a GUI like TablePlus.
 
-<h3>5.1.7. Breaking changes detected</h3>
+**5.1.7. Breaking changes detected**
 
 In case the Upgrade CLI has printed a note about breaking changes, your database schema needs some adjustments that will break Prisma 1 compatitibility in order to be fully optimized. 
 
@@ -1057,11 +1100,11 @@ Depending on your [upgrade strategy](./how-to-upgrade#upgrade-strategies), you c
 - If you are following the gradual side-by-side upgrade strategy, do not perform these changes yet since they will break your Prisma 1 setup. In that case, you can continue to the next phase of the Upgrade CLI by typing <kbd>n</kbd> and hitting <kbd>RETURN</kbd>.
 - If you are following the all at once upgrade strategy, you can perform these changes now. In that case, continue by typing <kbd>Y</kbd> and hitting <kbd>RETURN</kbd>.
 
-<h3>5.2. Fix the database schema via plain SQL (breaking)</h3>
+**5.2. Fix the database schema via plain SQL (breaking)**
 
 In this section, you'll resolve the schema incompatibilities that are breaking your Prisma 1 setup. Do not perform these changes if you are still running Prisma 1 in your project!
 
-<h3>5.2.1. Fix incorrect m-n relations</h3>
+**5.2.1. Fix incorrect m-n relations**
 
 Now, the Upgrade CLI helps you fix all 1-1 and 1-n relations that Prisma 1 represents with relation tables and that [currently only exist as m-n relations](./schema-incompatibilities#all-non-inline-relations-are-recognized-as-m-n) in your new Prisma 2 schema. Concretely, this is the case for the `User` ↔ `Post` relation which currently is defined as m-n but _should_ really be a 1-n relation. 
 
@@ -1124,7 +1167,7 @@ For this fix, you'll need to run three SQL statements:
 
 After these commands, the user ID values of the records from column `B` of the relation table are migrated to the new `authorId` column.
 
-<h3>5.2. Re-introspect your database to update your Prisma schema</h3>
+**5.2. Re-introspect your database to update your Prisma schema**
 
 At this point, you've resolved the schema incompatibilities with the Upgrade CLI. You can now exit the Upgrade CLI for now by typing <kbd>n</kbd> and hitting <kbd>RETURN</kbd>.
 
@@ -1180,7 +1223,7 @@ enum Role {
 
 This schema has most issues resolved, but it still lacks the following:
 
-<h3>5.2. Add missing attributes to the Prisma 2 schema and other schema fixes</h3>
+**5.2. Add missing attributes to the Prisma 2 schema and other schema fixes**
 
 The CLI now prints the following:
 

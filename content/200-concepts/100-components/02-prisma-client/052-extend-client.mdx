@@ -97,7 +97,7 @@ async function main() {
 
 The example above works, but it's not type-safe. You can call the signup function with any input. To make the example above type-safe, we'll utilize the exported types in `@prisma/client` along with some built-in types that Typescript provides.
 
-```tsx
+```tsx highlight=5-9;normal
 import { PrismaClient, Prisma, User, Team } from '@prisma/client'
 
 const prisma = new PrismaClient()
@@ -138,7 +138,7 @@ We'll go with superstruct for the example below. Let's extend your signup helper
 
 ### Validating with Typescript and Superstruct
 
-```tsx
+```tsx highlight=2,3,7-20,29-31;normal
 import { PrismaClient, Prisma, User, Team } from '@prisma/client'
 import { assert, object, string, size, refine } from 'superstruct'
 import isEmail from 'isemail'
@@ -197,7 +197,7 @@ Let's say we also want to derive the user's full name from their first and last 
 
 Before you jump into complex type definitions, let's look at how you would accomplish this in Javascript with a `computeFullName` helper function
 
-```jsx
+```jsx file=index.ts
 function computeFullName(user) {
   return {
     ...user,
@@ -217,9 +217,9 @@ This function will simply tack on a `fullName` attribute to the user that's pass
 
 But how do you make this type-safe and flexible? With Typescript's rich type system, you can define a function that accepts a generic as an input then extend that generic to ensure it conforms to a specific structure. Finally you can return that generic with additional computed fields. Let's see how that might look:
 
-```tsx
-// FullName type
-type FullName = {
+```tsx file=index.ts highlight=1-5,7-10m,13-15;normal
+// Define a type that needs a first and last name
+type FirstLastName = {
   firstName: string
   lastName: string
 }
@@ -229,7 +229,8 @@ type WithFullName<T> = T & {
   fullName: string
 }
 
-function computeFullName<User extends FullName>(
+// Take objects that satisfy FirstLastName and computes a full name
+function computeFullName<User extends FirstLastName>(
   user: User
 ): WithFullName<User> {
   return {
@@ -244,19 +245,21 @@ async function main() {
 }
 ```
 
-In the example above, we've defined a `User` generic that extends the `FullName` type, so it must contain a `firstName` and `lastName`. Finally, the return type tacks on a `fullName` attribute onto the `User` generic.
+In the example above, you've defined a `User` generic that extends the `FirstLastName` type. This means whatever you pass into `computeFullName` must contain `firstName` and `lastName` keys.
 
-With this function, any object that contains `firstName` and `lastName` keys can compute a fullName. Pretty neat, right?
+You've also defined a `WithFullName<User>` return type, which takes whatever `User` is and tacks on a `fullName` string attribute.
+
+With your function, any object that contains `firstName` and `lastName` keys can compute a `fullName`. Pretty neat, right?
 
 ## Excluding **Sensitive** Fields
 
-Very often, you don't want to include the **whole response** back from the database. In the signup function above, we've included the password in the response. Let's exclude this sensitive piece of data from the response.
+Very often, you don't want to include the **whole response** back from the database. In the signup function above, we've included the `password` in the response. Let's exclude this sensitive piece of data from the response.
 
 ### Exclude Password in Javascript
 
-Once again, we'll start with Javascript so we can focus on the logic. You first want to create an exclude helper function that takes a user and returns the user without certain fields:
+Once again, we'll start with Javascript so you can first focus on the logic. You first want to create an `exclude` helper function that takes a user and returns the user without certain fields:
 
-```tsx
+```tsx file=index.ts
 // Remove keys from user
 function exclude(user, ...keys) {
   for (let key of keys) {
@@ -271,15 +274,13 @@ function main() {
 }
 ```
 
-In example above, you've excluded the password by deleting that key off of the user.
-
 ### Exclude Password in Typescript
 
 Now let's make this `exclude` function type-safe. You first want to make sure that the keys you provide exist on the user and then you want to return a user that doesn't contain those keys.
 
 Here's what that would look like in Typescript:
 
-```tsx
+```tsx file=index.ts highlight=1-4;normal
 function exclude<User, Key extends keyof User>(
   user: User,
   ...keys: Key[]
@@ -308,7 +309,7 @@ One technique for consistently applying and organizing these helper functions is
 
 The most obvious way to wrap the Prisma Client is by wrapping it in a `Model` class:
 
-```tsx
+```tsx highlight=4,23,28-30;normal
 import { PrismaClient } from '@prisma/client'
 
 class Model {
@@ -349,7 +350,7 @@ Here we're only exposing a `signup` method from the Prisma Client. With this app
 
 But what if you don't want to hide existing functionality? In this case, you can use `Object.assign` to extend the Prisma Client without limiting it's functionality:
 
-```tsx
+```tsx highlight=2,27-29;normal
 function Model(model: PrismaClient['user']) {
   return Object.assign(model, {
     /**

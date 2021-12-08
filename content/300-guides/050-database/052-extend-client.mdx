@@ -1,11 +1,11 @@
 ---
-title: 'Validation, Computed Fields, and Custom Logic'
-metaTitle: 'Validation, Computed Fields, Excluding Keys, and Wrapping the Client (Concepts)'
+title: 'Extending the Prisma Client'
+metaTitle: 'Extend the Prisma Client with Validation, Computed Fields, Excluding Keys, and Custom Methods'
 metaDescription: 'How to add validation, computed fields, and custom logic to applications using the Prisma Client'
 tocDepth: 2
 ---
 
-## Extending the Prisma Client
+<TopBlock>
 
 A common request we get is that while Prisma is great for working with the database, your data needs are far more complex. You need to be able to:
 
@@ -45,15 +45,67 @@ model Team {
 }
 ```
 
+</TopBlock>
+
 ## Creating a Helper Function
 
 To kick things off, let's discuss how to abstract Prisma Client queries into functions. This will be used in the examples that follow.
 
-Let's build a signup function that requires user and team information to create rows in your database. We'll build this function first in Javascript then in Typescript.
+Let's build a signup function below that requires user and team information to create rows in your database.
 
-### Helper Function in Javascript
+To make this type-safe, we'll utilize the exported types in `@prisma/client` along with some built-in types that Typescript provides.
 
-In Javascript, that would look something like following:
+This example also demonstrates how you can use the built-in `Omit` type to exclude fields from the input, further restraining what the signup function will accept.
+
+<TabbedContent tabs={[<FileWithIcon text="TypeScript" icon="code"/>, <FileWithIcon text="JavaScript (Node.js)" icon="code"/>]}>
+
+<tab>
+
+```tsx highlight=5-9;normal
+import { PrismaClient, Prisma, User, Team } from '@prisma/client'
+
+const prisma = new PrismaClient()
+
+type Signup = {
+  // accept all team and user fields except id
+  team: Omit<Prisma.TeamCreateArgs['data'], 'id'>
+  user: Omit<Prisma.UserCreateArgs['data'], 'id'>
+}
+
+async function signup(input: Signup): Promise<User> {
+  const team = await prisma.team.create({
+    data: {
+      ...input.team,
+      users: {
+        create: input.user,
+      },
+    },
+    include: {
+      users: true,
+    },
+  })
+  return team.users[0]
+}
+
+// Run the signup function
+async function main() {
+  const { team, user } = await signup({
+    team: {
+      name: 'Super Coffee',
+    },
+    user: {
+      firstName: 'Alice',
+      lastName: 'Wonderland',
+      email: 'alice@prisma.io',
+      password: 'everything is awesome',
+    },
+  })
+}
+```
+
+</tab>
+
+<tab>
 
 ```tsx
 import { PrismaClient } from '@prisma/client'
@@ -93,52 +145,21 @@ async function main() {
 }
 ```
 
-### Helper Function in Typescript
+</tab>
 
-The example above works, but it's not type-safe. You can call the signup function with any input. To make the example above type-safe, we'll utilize the exported types in `@prisma/client` along with some built-in types that Typescript provides.
-
-```tsx highlight=5-9;normal
-import { PrismaClient, Prisma, User, Team } from '@prisma/client'
-
-const prisma = new PrismaClient()
-
-type Signup = {
-  // accept all team and user fields except id
-  team: Omit<Prisma.TeamCreateArgs['data'], 'id'>
-  user: Omit<Prisma.UserCreateArgs['data'], 'id'>
-}
-
-async function signup(input: Signup): Promise<User> {
-  const team = await prisma.team.create({
-    data: {
-      ...input.team,
-      users: {
-        create: input.user,
-      },
-    },
-    include: {
-      users: true,
-    },
-  })
-  return team.users[0]
-}
-```
-
-In this example, you've linked the `Signup` input to the types in your database using `Prisma.TeamCreateArgs["data"]` and `Prisma.UserCreateArgs["data"]`. Then when the team or user fields change, your signup function will change with it.
-
-This example also demonstrates how you can use the built-in `Omit` type to exclude fields from the input, further restraining what the signup function will accept.
+</TabbedContent>
 
 ## Validating User Input
 
 Some data must be validated at runtime. For example, there's no way to type-check that your user's email contains an `@` symbol at build time. To ensure that the data you get is the data you expect, you can use runtime validation.
 
-The Node.js ecosystem provides a number of high-quality, easy-to-use validation libraries you can choose from including: [joi](https://github.com/sideway/joi), [validator.js,](https://github.com/validatorjs/validator.js) [yup](https://github.com/jquense/yup) and [superstruct](https://github.com/ianstormtaylor/superstruct).
+The Node.js ecosystem provides a number of high-quality, easy-to-use validation libraries you can choose from including: [joi](https://github.com/sideway/joi), [validator.js,](https://github.com/validatorjs/validator.js) [yup](https://github.com/jquense/yup), [zod](https://github.com/colinhacks/zod) and [superstruct](https://github.com/ianstormtaylor/superstruct).
 
-We'll go with superstruct for the example below. Let's extend your signup helper function to ensure that the data you get meets your expectation.
+Let's go with superstruct for the example below and extend the signup helper function to ensure that the data you get meets your expectation.
 
-### Validating with Typescript and Superstruct
+### Adding Validation to Your Signup Function
 
-```tsx highlight=2,3,7-20,29-31;normal
+```tsx file=index.ts highlight=2,3,7-20,29-31;normal
 import { PrismaClient, Prisma, User, Team } from '@prisma/client'
 import { assert, object, string, size, refine } from 'superstruct'
 import isEmail from 'isemail'
@@ -185,39 +206,26 @@ async function signup(input: Signup): Promise<User> {
 }
 ```
 
-This example shows how you can easily add runtime validation to provide additionally check that the data we receive is the data we expect.
+The example aboves shows how you can easily add runtime validation to provide additionally check that the data we receive is the data we expect.
 
 ## Computed Fields
 
 Another common pattern is computing a field that's derived from other data.
 
+With Typescript's rich type system, you can define a function that accepts a generic as an input then extend that generic to ensure it conforms to a specific structure. Finally you can return that generic with additional computed fields. Let's see how that might look:
+
 Let's say we also want to derive the user's full name from their first and last name. In the example below, you'll create a helper function to compute a full name from the first and last name stored in the database.
 
-### Computing a Full Name in Javascript
+### Computing a Full Name
 
-Before you jump into complex type definitions, let's look at how you would accomplish this in Javascript with a `computeFullName` helper function
+The code below can look overwhelming. Keep in mind that at its core, `computeFullName`
+is simply tacking on a `fullName` attribute to a user that's passed in. If the following code is confusing, we recommend looking at the Javascript example to get a better sense of the logic before trying to make sense of the types.
 
-```jsx file=index.ts
-function computeFullName(user) {
-  return {
-    ...user,
-    fullName: user.firstName + ' ' + user.lastName,
-  }
-}
+<TabbedContent tabs={[<FileWithIcon text="TypeScript" icon="code"/>, <FileWithIcon text="JavaScript (Node.js)" icon="code"/>]}>
 
-async function main() {
-  const user = await prisma.user.findUnique({ where: 1 })
-  const userWithFullName = computeFullName(user)
-}
-```
+<tab>
 
-This function will simply tack on a `fullName` attribute to the user that's passed in.
-
-### Computing a Full Name in Typescript
-
-But how do you make this type-safe and flexible? With Typescript's rich type system, you can define a function that accepts a generic as an input then extend that generic to ensure it conforms to a specific structure. Finally you can return that generic with additional computed fields. Let's see how that might look:
-
-```tsx file=index.ts highlight=1-5,7-10m,13-15;normal
+```tsx highlight=1-5,7-10m,13-15;normal
 // Define a type that needs a first and last name
 type FirstLastName = {
   firstName: string
@@ -245,42 +253,47 @@ async function main() {
 }
 ```
 
-In the example above, you've defined a `User` generic that extends the `FirstLastName` type. This means whatever you pass into `computeFullName` must contain `firstName` and `lastName` keys.
+</tab>
 
-You've also defined a `WithFullName<User>` return type, which takes whatever `User` is and tacks on a `fullName` string attribute.
+<tab>
 
-With your function, any object that contains `firstName` and `lastName` keys can compute a `fullName`. Pretty neat, right?
+```js
+function computeFullName(user) {
+  return {
+    ...user,
+    fullName: user.firstName + ' ' + user.lastName,
+  }
+}
+
+async function main() {
+  const user = await prisma.user.findUnique({ where: 1 })
+  const userWithFullName = computeFullName(user)
+}
+```
+
+</tab>
+
+</TabbedContent>
+
+In the TypeScript example above, a `User` generic has been defined that extends the `FirstLastName` type. This means that whatever you pass into `computeFullName` must contain `firstName` and `lastName` keys.
+
+A `WithFullName<User>` return type has also been defined, which takes whatever `User` is and tacks on a `fullName` string attribute.
+
+With this function, any object that contains `firstName` and `lastName` keys can compute a `fullName`. Pretty neat, right?
 
 ## Excluding **Sensitive** Fields
 
 Very often, you don't want to include the **whole response** back from the database. In the signup function above, we've included the `password` in the response. Let's exclude this sensitive piece of data from the response.
 
-### Exclude Password in Javascript
+### Excluding the Password Field
 
-Once again, we'll start with Javascript so you can first focus on the logic. You first want to create an `exclude` helper function that takes a user and returns the user without certain fields:
+Let's create an `exclude` helper function that takes a user and returns that user without some keys.
 
-```tsx file=index.ts
-// Remove keys from user
-function exclude(user, ...keys) {
-  for (let key of keys) {
-    delete user[key]
-  }
-  return user
-}
+<TabbedContent tabs={[<FileWithIcon text="TypeScript" icon="code"/>, <FileWithIcon text="JavaScript (Node.js)" icon="code"/>]}>
 
-function main() {
-  const user = await prisma.user.findUnique({ where: 1 })
-  const userWithoutPassword = exclude(user, 'password')
-}
-```
+<tab>
 
-### Exclude Password in Typescript
-
-Now let's make this `exclude` function type-safe. You first want to make sure that the keys you provide exist on the user and then you want to return a user that doesn't contain those keys.
-
-Here's what that would look like in Typescript:
-
-```tsx file=index.ts highlight=1-4;normal
+```tsx highlight=1-4;normal
 function exclude<User, Key extends keyof User>(
   user: User,
   ...keys: Key[]
@@ -297,7 +310,30 @@ function main() {
 }
 ```
 
-In this example, we've provided two generics `User` and `Key`. The `Key` generic is defined as the keys of a `User` (e.g. email, password, firstName, etc.). These generics flow through the logic, returning a User that omits the list of keys provided.
+</tab>
+
+<tab>
+
+```js
+// Remove keys from user
+function exclude(user, ...keys) {
+  for (let key of keys) {
+    delete user[key]
+  }
+  return user
+}
+
+function main() {
+  const user = await prisma.user.findUnique({ where: 1 })
+  const userWithoutPassword = exclude(user, 'password')
+}
+```
+
+</tab>
+
+</TabbedContent>
+
+In the TypeScript example, we've provided two generics: `User` and `Key`. The `Key` generic is defined as the keys of a `User` (e.g. email, password, firstName, etc.). These generics flow through the logic, returning a `User` that omits the list of `Key`s provided.
 
 ## Organizing the Prisma Client **into Models**
 
@@ -311,6 +347,9 @@ The most obvious way to wrap the Prisma Client is by wrapping it in a `Model` cl
 
 ```tsx highlight=4,23,28-30;normal
 import { PrismaClient } from '@prisma/client'
+import { assert } from 'superstruct'
+
+// ... previously defined Signup validation and helper functions ...
 
 class Model {
   constructor(private readonly model: PrismaClient['user']) {}
@@ -351,6 +390,11 @@ Here we're only exposing a `signup` method from the Prisma Client. With this app
 But what if you don't want to hide existing functionality? In this case, you can use `Object.assign` to extend the Prisma Client without limiting it's functionality:
 
 ```tsx highlight=2,27-29;normal
+import { PrismaClient } from '@prisma/client'
+import { assert } from 'superstruct'
+
+// ... previously defined Signup validation and helper functions ...
+
 function Model(model: PrismaClient['user']) {
   return Object.assign(model, {
     /**
